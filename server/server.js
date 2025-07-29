@@ -56,7 +56,9 @@ const clientSchema = new mongoose.Schema({
   mobile: String,
   lunchCost: Number,
   dinnerCost: Number,
-  remindersEnabled: Boolean
+  remindersEnabled: Boolean,
+  customQuantityEnabled: { type: Boolean, default: false },
+  discount: { type: Number, default: 0 } // Discount percentage for the client
 });
 const Client = mongoose.model('Client', clientSchema);
 
@@ -84,10 +86,13 @@ app.get('/api/clients', async (req, res) => {
 
 // PUT /api/clients/:id - Update a client
 app.put('/api/clients/:id', async (req, res) => {
+  console.log('PUT /api/clients/:id', req.params.id, req.body);
   try {
-    const updated = await Client.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updateData = { ...req.body };
+    const updated = await Client.findByIdAndUpdate(req.params.id, updateData, { new: true });
     res.json(updated);
   } catch (err) {
+    console.error('Error updating client:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -162,15 +167,17 @@ const billSchema = new mongoose.Schema({
     name: String,
     mobile: String,
     lunchCost: Number,
-    dinnerCost: Number
+    dinnerCost: Number,
+    discount: Number
   },
   month: String,
   lunchDays: Number,
   dinnerDays: Number,
   lunchTotal: Number,
   dinnerTotal: Number,
+  discountAmount: Number,
   grandTotal: Number,
-  attendanceRecords: [String], // Array of Attendance record IDs
+  attendanceRecords: [String],
   generatedAt: { type: Date, default: Date.now }
 });
 const Bill = mongoose.model('Bill', billSchema);

@@ -18,6 +18,7 @@ const Index = () => {
   const [attendance, setAttendance] = useState([]);
   const [bills, setBills] = useState([]);
   const [prints, setPrints] = useState([]);
+  const [activeTab, setActiveTab] = useState('clients');
 
   // Fetch data from backend on mount
   useEffect(() => {
@@ -51,6 +52,11 @@ const Index = () => {
     fetchData();
   }, []);
 
+  // Log clients data after fetching to inspect customQuantityEnabled
+  useEffect(() => {
+    console.log("Fetched Clients Data:", clients);
+  }, [clients]);
+
   // Calculate dashboard metrics (using fetched data)
   const today = new Date();
   const todayMeals = attendance.filter(a => a.date && isSameDay(parseISO(a.date), today)).length;
@@ -63,9 +69,17 @@ const Index = () => {
     return monthlyAttendance.reduce((total, record) => {
       const client = clientsData.find(c => c._id === record.clientId || c.id === record.clientId);
       if (!client) return total;
-      return total + (record.mealType === 'lunch' ? client.lunchCost : client.dinnerCost || 0);
+      // Calculate total based on quantity * cost
+      const quantity = parseInt(record.quantity) || 1;
+      const cost = record.mealType === 'lunch' ? client.lunchCost : client.dinnerCost;
+      return total + (quantity * cost);
     }, 0);
   }
+
+  const handleSelectClientAndViewAttendance = (client) => {
+    setSelectedClient(client);
+    setActiveTab('attendance');
+  };
 
   const handleLogin = (credentials) => {
     // Use username for login
@@ -129,7 +143,7 @@ const Index = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Dashboard Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
           <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -180,18 +194,18 @@ const Index = () => {
         </div>
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue="clients" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:grid-cols-3">
-            <TabsTrigger value="clients">Client Management</TabsTrigger>
-            <TabsTrigger value="attendance">Attendance Tracking</TabsTrigger>
-            <TabsTrigger value="billing">Billing & Reports</TabsTrigger>
+        <Tabs defaultValue="clients" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 lg:w-auto lg:grid-cols-3">
+            <TabsTrigger value="clients" className="text-center">Client Management</TabsTrigger>
+            <TabsTrigger value="attendance" className="text-center">Attendance Tracking</TabsTrigger>
+            <TabsTrigger value="billing" className="flex items-center gap-2 text-center">Billing & Reports</TabsTrigger>
           </TabsList>
 
           <TabsContent value="clients">
             <ClientManagement 
               clients={clients} 
               setClients={setClients}
-              onSelectClient={setSelectedClient}
+              onSelectClient={handleSelectClientAndViewAttendance}
             />
           </TabsContent>
 

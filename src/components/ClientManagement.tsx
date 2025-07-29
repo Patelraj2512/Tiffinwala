@@ -17,7 +17,9 @@ const ClientManagement = ({ clients, setClients, onSelectClient }) => {
     mobile: '',
     lunchCost: '',
     dinnerCost: '',
-    remindersEnabled: true
+    remindersEnabled: true,
+    customQuantityEnabled: false,
+    discount: '0'
   });
 
   const resetForm = () => {
@@ -26,7 +28,9 @@ const ClientManagement = ({ clients, setClients, onSelectClient }) => {
       mobile: '',
       lunchCost: '',
       dinnerCost: '',
-      remindersEnabled: true
+      remindersEnabled: true,
+      customQuantityEnabled: false,
+      discount: '0'
     });
     setEditingClient(null);
   };
@@ -43,7 +47,8 @@ const ClientManagement = ({ clients, setClients, onSelectClient }) => {
     const clientData = {
       ...formData,
       lunchCost: parseFloat(formData.lunchCost),
-      dinnerCost: parseFloat(formData.dinnerCost)
+      dinnerCost: parseFloat(formData.dinnerCost),
+      discount: parseFloat(formData.discount)
     };
 
     if (editingClient) {
@@ -81,7 +86,9 @@ const ClientManagement = ({ clients, setClients, onSelectClient }) => {
       mobile: client.mobile,
       lunchCost: client.lunchCost.toString(),
       dinnerCost: client.dinnerCost.toString(),
-      remindersEnabled: client.remindersEnabled
+      remindersEnabled: client.remindersEnabled,
+      customQuantityEnabled: client.customQuantityEnabled,
+      discount: client.discount ? client.discount.toString() : '0'
     });
     setIsDialogOpen(true);
   };
@@ -165,6 +172,21 @@ const ClientManagement = ({ clients, setClients, onSelectClient }) => {
                   />
                 </div>
               </div>
+              <div>
+                <Label htmlFor="discount">Discount (%)</Label>
+                <Input
+                  id="discount"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={formData.discount}
+                  onChange={(e) => setFormData({...formData, discount: e.target.value})}
+                  placeholder="0"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Enter the discount percentage for this client (0-100)
+                </p>
+              </div>
               <div className="flex items-center space-x-2">
                 <Switch
                   id="reminders"
@@ -172,6 +194,19 @@ const ClientManagement = ({ clients, setClients, onSelectClient }) => {
                   onCheckedChange={(checked) => setFormData({...formData, remindersEnabled: checked})}
                 />
                 <Label htmlFor="reminders">Enable SMS/WhatsApp Reminders</Label>
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="customQuantity"
+                    checked={formData.customQuantityEnabled}
+                    onCheckedChange={(checked) => setFormData({...formData, customQuantityEnabled: checked})}
+                  />
+                  <Label htmlFor="customQuantity">Enable Custom Quantity Input</Label>
+                </div>
+                <p className="text-sm text-gray-500 mt-1">
+                  If enabled, the quantity input will always be visible for this client in Attendance Tracking.
+                </p>
               </div>
               <div className="flex justify-end space-x-2 pt-4">
                 <Button 
@@ -234,14 +269,26 @@ const ClientManagement = ({ clients, setClients, onSelectClient }) => {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Dinner:</span>
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                  <Badge variant="secondary" className="bg-green-100 text-green-800">
                     ₹{client.dinnerCost}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Discount:</span>
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                    {client.discount || 0}%
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Reminders:</span>
                   <Badge variant={client.remindersEnabled ? "default" : "secondary"}>
                     {client.remindersEnabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Custom Quantity:</span>
+                  <Badge variant={client.customQuantityEnabled ? "default" : "secondary"}>
+                    {client.customQuantityEnabled ? "Enabled" : "Disabled"}
                   </Badge>
                 </div>
                 <Button 

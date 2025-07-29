@@ -46,19 +46,34 @@ const RollerBillPrint = ({ clients, attendance, bills, prints, setPrints }) => {
       record => record.clientId === clientId && record.date && isSameMonth(parseISO(record.date), monthDate)
     );
 
-    const lunchDays = monthlyAttendance.filter(record => record.mealType === 'lunch').length;
-    const dinnerDays = monthlyAttendance.filter(record => record.mealType === 'dinner').length;
+    // Calculate total quantities for lunch and dinner
+    const lunchRecords = monthlyAttendance.filter(record => record.mealType === 'lunch');
+    const dinnerRecords = monthlyAttendance.filter(record => record.mealType === 'dinner');
+    
+    // Calculate total quantities by summing up quantities for each record
+    const lunchQuantity = lunchRecords.reduce((sum, record) => sum + (parseInt(record.quantity) || 1), 0);
+    const dinnerQuantity = dinnerRecords.reduce((sum, record) => sum + (parseInt(record.quantity) || 1), 0);
 
-    const lunchTotal = lunchDays * client.lunchCost;
-    const dinnerTotal = dinnerDays * client.dinnerCost;
-    const grandTotal = lunchTotal + dinnerTotal;
+    // Calculate totals by multiplying quantity with cost
+    const lunchTotal = lunchQuantity * client.lunchCost;
+    const dinnerTotal = dinnerQuantity * client.dinnerCost;
+    const subtotal = lunchTotal + dinnerTotal;
+
+    // Calculate discount amount
+    const discountPercentage = client.discount || 0;
+    const discountAmount = (subtotal * discountPercentage) / 100;
+    const grandTotal = subtotal - discountAmount;
 
     return {
       client,
-      lunchDays,
-      dinnerDays,
+      lunchDays: lunchRecords.length,
+      dinnerDays: dinnerRecords.length,
+      lunchQuantity,
+      dinnerQuantity,
       lunchTotal,
       dinnerTotal,
+      discountPercentage,
+      discountAmount,
       grandTotal,
       monthlyAttendance: monthlyAttendance.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     };
@@ -194,7 +209,7 @@ const RollerBillPrint = ({ clients, attendance, bills, prints, setPrints }) => {
             }
             .total-line {
               font-weight: bold;
-              border-top: 1px solid #000;
+              border-top: 1px dashed #000;
               padding-top: 0.5mm;
               margin-top: 0.5mm;
             }
@@ -220,7 +235,7 @@ const RollerBillPrint = ({ clients, attendance, bills, prints, setPrints }) => {
                   <span>₹${bill.lunchTotal}</span>
                 </div>
                 <div class="line">
-                  <span>@ ₹${bill.client.lunchCost} per day</span>
+                  <span>Quantity: ${bill.lunchQuantity} × ₹${bill.client.lunchCost}</span>
                   <span></span>
                 </div>
                 <div class="line">
@@ -228,10 +243,20 @@ const RollerBillPrint = ({ clients, attendance, bills, prints, setPrints }) => {
                   <span>₹${bill.dinnerTotal}</span>
                 </div>
                 <div class="line">
-                  <span>@ ₹${bill.client.dinnerCost} per day</span>
+                  <span>Quantity: ${bill.dinnerQuantity} × ₹${bill.client.dinnerCost}</span>
                   <span></span>
                 </div>
+                ${bill.discountPercentage > 0 ? `
                 <div class="line total-line">
+                  <span>Subtotal</span>
+                  <span>₹${bill.lunchTotal + bill.dinnerTotal}</span>
+                </div>
+                <div class="line">
+                  <span>Discount (${bill.discountPercentage}%)</span>
+                  <span>-₹${bill.discountAmount}</span>
+                </div>
+                ` : ''}
+                <div class="line total-line" style="border-top: 1px solid #000;">
                   <span>TOTAL</span>
                   <span>₹${bill.grandTotal}</span>
                 </div>

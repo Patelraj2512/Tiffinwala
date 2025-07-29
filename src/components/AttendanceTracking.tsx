@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,10 +10,36 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
 
 const AttendanceTracking = ({ clients, attendance, setAttendance, selectedClient, setSelectedClient }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [quantities, setQuantities] = useState({});
   
+  // Fetch latest attendance from backend and initialize quantities
+  const fetchAttendance = async () => {
+    const res = await fetch('http://localhost:5000/api/attendance');
+    const data = await res.json();
+    setAttendance(data);
+
+    // Initialize quantities state from fetched attendance data
+    const initialQuantities = {};
+    data.forEach(record => {
+      initialQuantities[`${record.clientId}-${record.date}-${record.mealType}`] = parseInt(record.quantity) || 1;
+    });
+    setQuantities(initialQuantities);
+  };
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [setAttendance]); // Add setAttendance to dependencies if it's not stable
+
+  // Effect to update internal state or re-render when clients prop changes
+  useEffect(() => {
+    // This effect ensures the component re-renders with the latest client data
+    // No specific state update is needed here, as using clients directly in render
+  }, [clients]);
+
   const getDaysInMonth = (year, month) => {
     return new Date(year, month, 0).getDate();
   };
@@ -25,13 +51,6 @@ const AttendanceTracking = ({ clients, attendance, setAttendance, selectedClient
   const currentYear = currentMonth.getFullYear();
   const currentMonthNum = currentMonth.getMonth() + 1;
   const daysInMonth = getDaysInMonth(currentYear, currentMonthNum);
-
-  // Fetch latest attendance from backend
-  const fetchAttendance = async () => {
-    const res = await fetch('http://localhost:5000/api/attendance');
-    const data = await res.json();
-    setAttendance(data);
-  };
 
   const toggleAttendance = async (clientId, date, mealType) => {
     const client = clients.find(c => c._id === clientId);
@@ -57,6 +76,7 @@ const AttendanceTracking = ({ clients, attendance, setAttendance, selectedClient
         clientId,
         date,
         mealType,
+        quantity: quantities[`${clientId}-${date}-${mealType}`] || 1,
         timestamp: new Date().toLocaleTimeString('en-US', { 
           hour: '2-digit', 
           minute: '2-digit' 
@@ -73,6 +93,67 @@ const AttendanceTracking = ({ clients, attendance, setAttendance, selectedClient
       });
     }
     fetchAttendance();
+  };
+
+  const handleQuantityChange = async (clientId, date, mealType, value) => {
+    const key = `${clientId}-${date}-${mealType}`;
+    const newQuantity = Math.max(1, parseInt(value) || 1);
+
+    // Update local state immediately for responsiveness
+    setQuantities(prev => ({
+      ...prev,
+      [key]: newQuantity
+    }));
+
+    // Find the existing attendance record
+    const existingRecord = attendance.find(
+      record => record.clientId === clientId && 
+                record.date === date && 
+                record.mealType === mealType
+    );
+
+    // If a record exists, update it in the backend
+    if (existingRecord) {
+      try {
+        const response = await fetch(`http://localhost:5000/api/attendance/${existingRecord._id}`, {
+          method: 'PUT', // Or PATCH, depending on your API
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...existingRecord, quantity: newQuantity })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Update the attendance state with the modified record
+        const updatedRecord = await response.json();
+        setAttendance(prevAttendance => 
+          prevAttendance.map(record => 
+            record._id === updatedRecord._id ? updatedRecord : record
+          )
+        );
+
+        toast({
+          title: "Quantity Updated",
+          description: `${mealType} quantity updated to ${newQuantity} for ${date}`
+        });
+
+      } catch (error) {
+        console.error('Error updating quantity:', error);
+        toast({
+          title: "Error Updating Quantity",
+          description: `Failed to update ${mealType} quantity. ${error.message}`,
+          variant: 'destructive',
+        });
+        // Optionally, revert the local state change on error
+        setQuantities(prev => ({
+          ...prev,
+          [key]: existingRecord.quantity // Revert to previous quantity on error
+        }));
+      }
+    }
+    // Note: If no existing record, handleQuantityChange alone doesn't add one.
+    // Adding a record is handled by toggleAttendance when the checkbox is checked.
   };
 
   const isAttendanceMarked = (clientId, date, mealType) => {
@@ -224,6 +305,16 @@ const AttendanceTracking = ({ clients, attendance, setAttendance, selectedClient
                               >
                                 L
                               </label>
+                              {/* Show quantity input if attendance marked or custom quantity enabled */}
+                              {(isLunchMarked || client.customQuantityEnabled) && (
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={quantities[`${client._id}-${date}-lunch`] || 1}
+                                  onChange={(e) => handleQuantityChange(client._id, date, 'lunch', e.target.value)}
+                                  className="w-12 h-6 text-xs"
+                                />
+                              )}
                             </div>
                             
                             <div className="flex items-center space-x-1">
@@ -238,22 +329,20 @@ const AttendanceTracking = ({ clients, attendance, setAttendance, selectedClient
                               >
                                 D
                               </label>
+                              {(isDinnerMarked || client.customQuantityEnabled) && (
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={quantities[`${client._id}-${date}-dinner`] || 1}
+                                  onChange={(e) => handleQuantityChange(client._id, date, 'dinner', e.target.value)}
+                                  className="w-12 h-6 text-xs"
+                                />
+                              )}
                             </div>
                           </div>
                         </div>
                       );
                     })}
-                  </div>
-                  
-                  <div className="mt-4 flex justify-center space-x-6 text-sm text-gray-600">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-green-500 rounded"></div>
-                      <span>L = Lunch (₹{client.lunchCost})</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-blue-500 rounded"></div>
-                      <span>D = Dinner (₹{client.dinnerCost})</span>
-                    </div>
                   </div>
                 </CardContent>
               </Card>

@@ -93,12 +93,23 @@ const BillingSystem = ({ clients, attendance, bills, setBills, prints, setPrints
     );
     console.log(`calculateClientBill for client ${clientId} and month ${format(monthDate, 'yyyy-MM')}:`, { monthlyAttendance });
 
-    const lunchDays = monthlyAttendance.filter(record => record.mealType === 'lunch').length;
-    const dinnerDays = monthlyAttendance.filter(record => record.mealType === 'dinner').length;
+    // Calculate total quantities for lunch and dinner
+    const lunchRecords = monthlyAttendance.filter(record => record.mealType === 'lunch');
+    const dinnerRecords = monthlyAttendance.filter(record => record.mealType === 'dinner');
+    
+    // Calculate total quantities by summing up quantities for each record
+    const lunchQuantity = lunchRecords.reduce((sum, record) => sum + (parseInt(record.quantity) || 1), 0);
+    const dinnerQuantity = dinnerRecords.reduce((sum, record) => sum + (parseInt(record.quantity) || 1), 0);
 
-    const lunchTotal = lunchDays * client.lunchCost;
-    const dinnerTotal = dinnerDays * client.dinnerCost;
-    const grandTotal = lunchTotal + dinnerTotal;
+    // Calculate totals by multiplying quantity with cost
+    const lunchTotal = lunchQuantity * client.lunchCost;
+    const dinnerTotal = dinnerQuantity * client.dinnerCost;
+    const subtotal = lunchTotal + dinnerTotal;
+
+    // Calculate discount amount
+    const discountPercentage = client.discount || 0;
+    const discountAmount = (subtotal * discountPercentage) / 100;
+    const grandTotal = subtotal - discountAmount;
 
     return {
       client: { // Store only necessary client details to avoid large embedded documents
@@ -106,13 +117,17 @@ const BillingSystem = ({ clients, attendance, bills, setBills, prints, setPrints
         name: client.name,
         mobile: client.mobile,
         lunchCost: client.lunchCost,
-        dinnerCost: client.dinnerCost
+        dinnerCost: client.dinnerCost,
+        discount: client.discount
       },
       month: format(monthDate, 'yyyy-MM'), // Store month as yyyy-MM string
-      lunchDays,
-      dinnerDays,
+      lunchDays: lunchRecords.length,
+      dinnerDays: dinnerRecords.length,
+      lunchQuantity,
+      dinnerQuantity,
       lunchTotal,
       dinnerTotal,
+      discountAmount,
       grandTotal,
       attendanceRecords: monthlyAttendance.map(record => record._id) // Store attendance record IDs
     };
@@ -179,22 +194,11 @@ const BillingSystem = ({ clients, attendance, bills, setBills, prints, setPrints
     clients.filter(c => c._id.toString() === selectedClient);
 
   const monthlyTotals = filteredClients.reduce((totals, client) => {
-    // Check if a saved bill exists for this client and month
-    const existingBill = bills.find(
-      b => b.client && b.client._id === client._id && b.month === format(selectedMonth, 'yyyy-MM') // Compare with formatted month string
-    );
-
-    if (existingBill) {
-      // Use saved bill data for totals
-      totals.totalMeals += existingBill.lunchDays + existingBill.dinnerDays;
-      totals.totalIncome += existingBill.grandTotal;
-    } else {
-      // Calculate from attendance if no saved bill exists
-      const bill = calculateClientBill(client._id, selectedMonth);
-      if (bill) {
-        totals.totalMeals += bill.lunchDays + bill.dinnerDays;
-        totals.totalIncome += bill.grandTotal;
-      }
+    // Always calculate from attendance for the monthly totals summary
+    const bill = calculateClientBill(client._id, selectedMonth);
+    if (bill) {
+      totals.totalMeals += bill.lunchQuantity + bill.dinnerQuantity;
+      totals.totalIncome += bill.grandTotal;
     }
     console.log('monthlyTotals intermediate:', totals);
     return totals;
@@ -350,65 +354,27 @@ const BillingSystem = ({ clients, attendance, bills, setBills, prints, setPrints
                       </CardHeader>
                       
                       <CardContent className="p-6">
-                        <div className="space-y-4">
-                          {/* Lunch Details */}
-                          <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
-                            <div>
-                              <h4 className="font-semibold text-green-800">Lunch</h4>
-                              <p className="text-sm text-green-600">
-                                {billToDisplay.lunchDays} days × ₹{billToDisplay.client.lunchCost}
-                              </p>
-                            </div>
-                            <Badge variant="secondary" className="bg-green-100 text-green-800 text-lg px-3 py-1">
-                              ₹{billToDisplay.lunchTotal}
-                            </Badge>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span>Lunch ({billToDisplay.lunchDays} days)</span>
+                            <span>₹{billToDisplay.lunchTotal}</span>
                           </div>
-
-                          {/* Dinner Details */}
-                          <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                            <div>
-                              <h4 className="font-semibold text-blue-800">Dinner</h4>
-                              <p className="text-sm text-blue-600">
-                                {billToDisplay.dinnerDays} days × ₹{billToDisplay.client.dinnerCost}
-                              </p>
-                            </div>
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-lg px-3 py-1">
-                              ₹{billToDisplay.dinnerTotal}
-                            </Badge>
+                          <div className="flex justify-between text-sm text-gray-500">
+                            <span>Quantity: {billToDisplay.lunchQuantity}</span>
+                            <span>Rate: ₹{billToDisplay.client.lunchCost}/meal</span>
                           </div>
-
-                          <Separator />
-
-                          {/* Total */}
-                          <div className="flex justify-between items-center p-4 bg-amber-50 rounded-lg">
-                            <div>
-                              <h4 className="font-bold text-amber-800 text-lg">Total Amount</h4>
-                              <p className="text-sm text-amber-600">
-                                {billToDisplay.lunchDays + billToDisplay.dinnerDays} total meals
-                              </p>
-                            </div>
-                            <Badge className="bg-amber-500 text-white text-xl px-4 py-2">
-                              ₹{billToDisplay.grandTotal}
-                            </Badge>
+                          <div className="flex justify-between">
+                            <span>Dinner ({billToDisplay.dinnerDays} days)</span>
+                            <span>₹{billToDisplay.dinnerTotal}</span>
                           </div>
-
-                          {/* Recent Meals - Display based on saved attendanceRecords or recalculate if not saved */}
-                          <div className="mt-6">
-                            <h5 className="font-semibold text-gray-700 mb-3">Recent Meals ({existingBill ? 'Saved' : 'Calculated from Attendance'})</h5>
-                            <div className="space-y-2 max-h-32 overflow-y-auto">
-                              {(existingBill && existingBill.attendanceRecords && existingBill.attendanceRecords.length > 0
-                                ? existingBill.attendanceRecords.map(recordId => attendance.find(att => att._id === recordId)).filter(Boolean) // Find attendance records by ID if saved
-                                : attendance.filter(record => record.clientId === client._id && record.date.startsWith(format(selectedMonth, 'yyyy-MM'))) // Otherwise, filter current attendance
-                              )
-                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                .slice(0, 5)
-                                .map((record, index) => (
-                                  <div key={record._id || index} className="flex justify-between text-sm text-gray-600 p-2 bg-gray-50 rounded">
-                                    <span>{new Date(record.date).toLocaleDateString()}</span>
-                                    <span className="capitalize">{record.mealType}</span>
-                                    <span>{record.timestamp}</span>
-                                  </div>
-                                ))}
+                          <div className="flex justify-between text-sm text-gray-500">
+                            <span>Quantity: {billToDisplay.dinnerQuantity}</span>
+                            <span>Rate: ₹{billToDisplay.client.dinnerCost}/meal</span>
+                          </div>
+                          <div className="border-t pt-2 mt-2">
+                            <div className="flex justify-between font-semibold">
+                              <span>Total</span>
+                              <span>₹{billToDisplay.grandTotal}</span>
                             </div>
                           </div>
                         </div>
